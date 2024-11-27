@@ -1,0 +1,14 @@
+<!-- <p>level-dashboard works!</p> -->
+<div class="dashboard">
+    <h2>Level {{ level }}</h2>
+    <div class="desks">
+      <div
+        *ngFor="let desk of desks"
+        [class]="desk.available ? 'desk available' : 'desk occupied'"
+        (click)="goToDeskTrends(desk.id)"
+      >
+        Desk {{ desk.id }}
+      </div>
+    </div>
+  </div>
+  
