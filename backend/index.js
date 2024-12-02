@@ -170,6 +170,112 @@ async function checkAndUpdateOccupancy() {
     }
 }
 
+app.get('/pir-sensor/:tableId', async (req, res) => {
+  try {
+      const result = await executeQuery(
+          `SELECT TOP 100 
+              table_id,
+              raw_PIR_data,
+              CASE WHEN PIR_Status = 1 THEN 'Motion Detected' ELSE 'No Motion' END as PIR_Status,
+              timestamp
+          FROM pir_sensor_data 
+          WHERE table_id = @table_id
+          ORDER BY timestamp DESC`,
+          {
+              table_id: { type: sql.Int, value: req.params.tableId }
+          }
+      );
+      
+      if (result.recordset.length === 0) {
+          res.status(404).json({ message: 'No PIR sensor data found for this table' });
+      } else {
+          res.json(result.recordset);
+      }
+  } catch (err) {
+      console.error('Error retrieving PIR sensor data:', err);
+      res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+app.get('/pressure-sensor/:tableId', async (req, res) => {
+  try {
+      const result = await executeQuery(
+          `SELECT TOP 100 
+              table_id,
+              raw_Pressure_data,
+              CASE WHEN Pressure_Status = 1 THEN 'Vibration Detected' ELSE 'No Vibration' END as Pressure_Status,
+              timestamp
+          FROM pressure_sensor_data 
+          WHERE table_id = @table_id
+          ORDER BY timestamp DESC`,
+          {
+              table_id: { type: sql.Int, value: req.params.tableId }
+          }
+      );
+      
+      if (result.recordset.length === 0) {
+          res.status(404).json({ message: 'No pressure sensor data found for this table' });
+      } else {
+          res.json(result.recordset);
+      }
+  } catch (err) {
+      console.error('Error retrieving pressure sensor data:', err);
+      res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+app.get('/table-status/:tableId', async (req, res) => {
+  try {
+      const pirResult = await executeQuery(
+          `SELECT TOP 1 
+              table_id,
+              raw_PIR_data,
+              CASE WHEN PIR_Status = 1 THEN 'Motion Detected' ELSE 'No Motion' END as PIR_Status,
+              timestamp
+          FROM pir_sensor_data
+          WHERE table_id = @table_id
+          ORDER BY timestamp DESC`,
+          {
+              table_id: { type: sql.Int, value: req.params.tableId }
+          }
+      );
+
+      const pressureResult = await executeQuery(
+          `SELECT TOP 1 
+              table_id,
+              raw_Pressure_data,
+              CASE WHEN Pressure_Status = 1 THEN 'Vibration Detected' ELSE 'No Vibration' END as Pressure_Status,
+              timestamp
+          FROM pressure_sensor_data
+          WHERE table_id = @table_id
+          ORDER BY timestamp DESC`,
+          {
+              table_id: { type: sql.Int, value: req.params.tableId }
+          }
+      );
+
+      const occupancyResult = await executeQuery(
+          `SELECT TOP 1 *
+          FROM occupancy_status
+          WHERE table_id = @table_id
+          ORDER BY timestamp DESC`,
+          {
+              table_id: { type: sql.Int, value: req.params.tableId }
+          }
+      );
+
+      res.json({
+          pir_sensor: pirResult.recordset[0] || null,
+          pressure_sensor: pressureResult.recordset[0] || null,
+          occupancy: occupancyResult.recordset[0] || null,
+          timestamp: new Date().toISOString()
+      });
+  } catch (err) {
+      console.error('Error retrieving table status:', err);
+      res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // Initialize everything
 async function initialize() {
     try {
