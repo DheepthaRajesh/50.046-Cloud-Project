@@ -1,13 +1,13 @@
 # SmartDeskFrontend
 
-This project is the frontend for the **Smart Desk Occupancy Monitoring System**, which helps monitor and visualize desk occupancy in shared workspaces like libraries. The application provides real-time occupancy data, trends, and intuitive navigation to enhance user experience.
+This project is the frontend for the **Smart Desk Occupancy Monitoring System**, which helps monitor and visualize desk occupancy in shared workspaces like libraries. The application provides real-time occupancy data and intuitive navigation to enhance user experience.
 
 ## Features
 
 - **Landing Page**: Displays total available seats in the library and seat counts per level.
 - **Level Overview**: View available desks for each level and navigate to the detailed desk view.
 - **Desk Dashboard**: Visual representation of desks (green for available, red for occupied).
-- **Desk Details**: Displays historical occupancy trends and other details for a selected desk.
+
 
 ## Navigation Structure
 
@@ -22,11 +22,7 @@ This project is the frontend for the **Smart Desk Occupancy Monitoring System**,
 3. **Level Dashboard**:
    - Dashboard for each specific level
    - Visualizes desks using icons (green for available, red for occupied).
-   - Clickable desks to view detailed occupancy data.
 
-4. **Desk Details**:
-   - For each desk
-   - Displays detailed occupancy trends and historical data for the selected desk. 
 
 ## More details:
 

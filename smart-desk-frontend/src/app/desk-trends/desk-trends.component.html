@@ -1,1 +1,6 @@
-<p>desk-trends works!</p>
+<!-- <p>desk-trends works!</p> -->
+<div class="details">
+    <p *ngIf="occupied === false" class="occupied">This desk is occupied</p>
+    <p *ngIf="occupied === true" class="available">This desk is available</p>
+    <p *ngIf="occupied === null" class="unknown">Desk occupancy status is unknown</p>
+  </div>

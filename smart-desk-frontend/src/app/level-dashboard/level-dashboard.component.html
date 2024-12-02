@@ -4,7 +4,7 @@
     <div class="desks">
       <div
         *ngFor="let desk of desks"
-        [class]="desk.available ? 'desk available' : 'desk occupied'"
+        [ngClass]="desk.occupied ? 'desk available' : 'desk occupied'"
         (click)="goToDeskTrends(desk.id)"
       >
         Desk {{ desk.id }}
