@@ -23,19 +23,15 @@ const dbConfig = {
     }
 };
 
-// Single pool instance
 let pool;
 
-// Initialize pool function
 async function initializePool() {
     try {
         if (pool) {
-            // If pool exists but is closed, create a new one
             if (!pool.connected && !pool.connecting) {
                 pool = await new sql.ConnectionPool(dbConfig).connect();
             }
         } else {
-            // Create new pool if none exists
             pool = await new sql.ConnectionPool(dbConfig).connect();
         }
         console.log('Successfully connected to SQL Server');
@@ -46,7 +42,6 @@ async function initializePool() {
     }
 }
 
-// Wrapper function for database queries
 async function executeQuery(query, params) {
     try {
         if (!pool || !pool.connected) {
@@ -68,16 +63,15 @@ async function executeQuery(query, params) {
     }
 }
 
-// Simulate sensor data insertion
 async function simulateDataInsertion() {
     try {
-        const tableId = 2;
+        const tableId = 3;
         const currentTime = new Date();
         
         const pirValue = Math.random() * 100;
         const pressureValue = Math.random() * 100;
-        const pirStatus = pirValue > 50 ? 1 : 0;
-        const pressureStatus = pressureValue > 50 ? 1 : 0;
+        const pirStatus = pirValue > 1 ? 1 : 0;
+        const pressureStatus = pressureValue > 1 ? 1 : 0;
 
         // Insert PIR data
         await executeQuery(
@@ -114,62 +108,69 @@ async function simulateDataInsertion() {
         console.error('Error inserting simulated data:', err);
     }
 }
-
 async function checkAndUpdateOccupancy() {
-    try {
-        for (let tableId = 1; tableId <= 8; tableId++) {
-            try {
-                const result = await executeQuery(
-                    `DECLARE @latestPIR bit, @latestPressure bit;
+  try {
+      for (let tableId = 1; tableId <= 8; tableId++) {
+          try {
+              const result = await executeQuery(
+                  `DECLARE @latestPIR bit, @latestPressure bit;
 
-                    SELECT TOP 1 @latestPIR = PIR_Status
-                    FROM pir_sensor_data 
-                    WHERE table_id = @table_id
-                    ORDER BY timestamp DESC;
+                  SELECT TOP 1 @latestPIR = PIR_Status
+                  FROM pir_sensor_data 
+                  WHERE table_id = @table_id
+                  ORDER BY timestamp DESC;
 
-                    SELECT TOP 1 @latestPressure = Pressure_Status
-                    FROM pressure_sensor_data
-                    WHERE table_id = @table_id
-                    ORDER BY timestamp DESC;
+                  SELECT TOP 1 @latestPressure = Pressure_Status
+                  FROM pressure_sensor_data
+                  WHERE table_id = @table_id
+                  ORDER BY timestamp DESC;
 
-                    SELECT @latestPIR as PIR_Status, @latestPressure as Pressure_Status;`,
-                    {
-                        table_id: { type: sql.Int, value: tableId }
-                    }
-                );
+                  SELECT @latestPIR as PIR_Status, @latestPressure as Pressure_Status;`,
+                  {
+                      table_id: { type: sql.Int, value: tableId }
+                  }
+              );
 
-                const sensorData = result.recordset[0];
-                
-                if (sensorData && (sensorData.PIR_Status !== null || sensorData.Pressure_Status !== null)) {
-                    const isOccupied = sensorData.PIR_Status === true && sensorData.Pressure_Status === true ? 1 : 0;
+              const sensorData = result.recordset[0];
+              
+              if (sensorData && (sensorData.PIR_Status !== null || sensorData.Pressure_Status !== null)) {
+                  const isOccupied = sensorData.PIR_Status === true && sensorData.Pressure_Status === true ? 1 : 0;
 
-                    await executeQuery(
-                        `INSERT INTO occupancy_status (table_id, Occupancy, timestamp)
-                         VALUES (@table_id, @Occupancy, @timestamp)`,
-                        {
-                            table_id: { type: sql.Int, value: tableId },
-                            Occupancy: { type: sql.Bit, value: isOccupied },
-                            timestamp: { type: sql.DateTime, value: new Date() }
-                        }
-                    );
+                  // Use MERGE statement to update or insert
+                  await executeQuery(
+                      `MERGE occupancy_status AS target
+                       USING (SELECT @table_id as table_id) AS source
+                       ON (target.table_id = source.table_id)
+                       WHEN MATCHED THEN
+                           UPDATE SET 
+                               Occupancy = @Occupancy,
+                               timestamp = @timestamp
+                       WHEN NOT MATCHED THEN
+                           INSERT (table_id, Occupancy, timestamp)
+                           VALUES (@table_id, @Occupancy, @timestamp);`,
+                      {
+                          table_id: { type: sql.Int, value: tableId },
+                          Occupancy: { type: sql.Bit, value: isOccupied },
+                          timestamp: { type: sql.DateTime, value: new Date() }
+                      }
+                  );
 
-                    console.log(`Updated occupancy for table ${tableId}:`, {
-                        PIR_Status: sensorData.PIR_Status,
-                        Pressure_Status: sensorData.Pressure_Status,
-                        Occupancy: isOccupied
-                    });
-                }
-            } catch (err) {
-                console.error(`Error processing table ${tableId}:`, err);
-                continue;
-            }
-        }
-        console.log('Completed occupancy status update for all tables');
-    } catch (err) {
-        console.error('Error in checkAndUpdateOccupancy:', err);
-    }
+                  console.log(`Updated occupancy for table ${tableId}:`, {
+                      PIR_Status: sensorData.PIR_Status,
+                      Pressure_Status: sensorData.Pressure_Status,
+                      Occupancy: isOccupied
+                  });
+              }
+          } catch (err) {
+              console.error(`Error processing table ${tableId}:`, err);
+              continue;
+          }
+      }
+      console.log('Completed occupancy status update for all tables');
+  } catch (err) {
+      console.error('Error in checkAndUpdateOccupancy:', err);
+  }
 }
-
 app.get('/pir-sensor/:tableId', async (req, res) => {
   try {
       const result = await executeQuery(
@@ -276,20 +277,16 @@ app.get('/table-status/:tableId', async (req, res) => {
   }
 });
 
-// Initialize everything
 async function initialize() {
     try {
         await initializePool();
         
-        // Set up intervals
         setInterval(simulateDataInsertion, 30000);
         setInterval(checkAndUpdateOccupancy, 5 * 60 * 1000);
         
-        // Run initial checks
         await simulateDataInsertion();
         await checkAndUpdateOccupancy();
         
-        // Start the server
         app.listen(port, () => {
             console.log(`Server is running on port ${port}`);
         });
