@@ -1,0 +1,13 @@
+<!-- <p>landing-page works!</p> -->
+<div class="landing">
+  <h1 class="main-heading">DeskPulse</h1>
+  <h1 class="sub-heading">A Smart Desk Occupancy Monitoring System</h1>
+  <h3 class="description">DeskPulse delivers real-time desk availability at a glance. Click Library to view occupancy by level — green means available, red means occupied. Click on any desk to explore occupancy trends and peak usage times effortlessly!</h3>
+  <button (click)="goToLevels()">LIBRARY</button>
+  <p class="total-seats">Total Available Seats: {{ totalSeats }}</p>
+  <div class="seats-level">
+    <p>Level 1: {{ level1Seats }}</p>
+    <p>Level 2: {{ level2Seats }}</p>
+  </div>
+</div>
+

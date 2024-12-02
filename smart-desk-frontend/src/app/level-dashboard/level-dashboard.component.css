@@ -1,0 +1,53 @@
+.dashboard {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  align-items: center;
+  height: 100vh;
+}
+
+.level {
+  font-size: 3rem;
+  color: #4B0082;
+  margin-bottom: 200px; /* Space below the heading */
+  margin-top: 100px;
+  
+}
+
+.desks {
+  display: grid; /* Display the desks in a grid */
+  grid-template-columns: repeat(auto-fit, minmax(80px, 1fr)); 
+  gap: 25px; 
+  justify-content: center; 
+  align-items: center; 
+  max-width: 600px; 
+  width: 100%; 
+}
+
+.desk {
+  width: 80px;
+  height: 80px;
+  text-align: center;
+  line-height: 80px;
+  border-radius: 10px;
+  cursor: pointer;
+  font-weight: bold;
+  font-size: 1.2rem;
+  transition: transform 0.3s ease, box-shadow 0.2s;
+}
+
+.desk:hover {
+  transform: scale(1.1); /* Slightly enlarge on hover */
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2); /* Add a shadow on hover */
+}
+
+.available {
+  background-color: green;
+  color: white;
+}
+
+.occupied {
+  background-color: red;
+  color: white;
+}
+  

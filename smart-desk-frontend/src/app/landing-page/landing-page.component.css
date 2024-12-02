@@ -1,0 +1,67 @@
+.landing {
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    align-items: center;
+    text-align: center;
+    height: 100vh;
+}
+  
+
+.main-heading {
+    font-size: 3rem;
+    color: #4B0082;
+    margin-bottom: 30px; /* Space below the heading */
+    
+}
+  
+.sub-heading {
+    font-size: 2.5rem;
+    color: #4B0082;
+    margin-bottom: 20px; /* Space below the heading */
+}
+
+.description {
+    font-size: 1.5rem;
+    color: #000000;
+    margin-bottom: 100px; /* Space below the heading */
+    max-width: 1200px;
+}
+  
+
+button {
+    padding: 70px 70px; /* Button box size */
+    font-size: 35px; /* Font size for button text */
+    cursor: pointer;
+    background-color: #00008B; 
+    color: #FFFFFF; 
+    border: none;
+    border-radius: 10px;
+    margin-bottom: 15px; /* Space below the button */
+    transition: transform 0.3s ease, background-color 0.3s ease;
+}
+  
+button:hover {
+    background-color: #1E90FF; /* Lighter blue on hover */
+    transform: scale(1.1); /* Slight enlargement */
+}
+  
+.total-seats{
+    font-size: 1.5rem;
+    font-weight: bold;
+    color: #000000;
+    margin-bottom: 1px;
+}
+
+.seats-level{
+    display: flex;
+    gap: 30px;
+}
+
+.seats-level p{
+    font-size: 1.3rem;
+    font-weight: bold;
+    color: #000000;
+}
+  
+  

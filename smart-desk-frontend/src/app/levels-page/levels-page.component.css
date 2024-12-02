@@ -1,0 +1,39 @@
+.levels {
+    display: flex;
+    flex-direction: row;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    gap: 350px;
+}
+
+.level{
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+}
+
+button {
+    padding: 70px 70px; /* Button box size */
+    font-size: 35px; /* Font size for button text */
+    cursor: pointer;
+    background-color: #00008B; 
+    color: #FFFFFF; 
+    border: none;
+    border-radius: 10px;
+    margin-bottom: 25px; /* Space below the button */
+    transition: transform 0.3s ease, background-color 0.3s ease;
+}
+  
+button:hover {
+    background-color: #1E90FF; /* Lighter blue on hover */
+    transform: scale(1.1); /* Slight enlargement */
+}
+
+.level p{
+    font-size: 1.3rem;
+    font-weight: bold;
+    color: #000000;
+    text-align: center;
+}
