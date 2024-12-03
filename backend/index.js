@@ -6,7 +6,8 @@ const { SerialPort, ReadlineParser } = require('serialport');
 const app = express();
 const port = process.env.PORT || 3000;
 
-// CORS and database configuration remain the same...
+
+const OCCUPANCY_COOLDOWN = 5*1000; // 15 minutes in millisecond
 app.use(cors({
   origin: 'http://localhost:4200'
 }));
@@ -27,6 +28,10 @@ const dbConfig = {
         idleTimeoutMillis: 30000
     }
 };
+let lastOccupancyChange = {
+  timestamp: null,
+  state: 0
+};
 
 let pool = new sql.ConnectionPool(dbConfig);
 const poolConnect = pool.connect()
@@ -39,7 +44,6 @@ const poolConnect = pool.connect()
         console.error('Failed to connect to SQL Server:', err);
     });
 
-// Database connection functions
 async function initializePool() {
     try {
         if (pool) {
@@ -72,179 +76,164 @@ async function executeQuery(query, params) {
     } catch (err) {
         if (err.code === 'ECONNCLOSED') {
             await initializePool();
-            return executeQuery(query, params); // Retry once
+            return executeQuery(query, params);
         }
         throw err;
     }
 }
 
 const serialPort = new SerialPort({
-  path: 'COM9',
-  baudRate: 115200,
+    path: 'COM9',
+    baudRate: 115200,
 });
 
 const parser = serialPort.pipe(new ReadlineParser());
 
-// Track last saved states
+// Track last saved states and timestamps
 let lastSavedStates = {
-  pir1: null,
-  pir2: null,
-  lastSaveTime: new Date()
+    pir1: null,
+    pir2: null,
+    lastSaveTime: new Date()
 };
 
-// Function to process and insert sensor data
 async function processSensorData(pir1Value, pir2Value, forceUpdate = false) {
   try {
       const currentTime = new Date();
       const timeSinceLastSave = currentTime - lastSavedStates.lastSaveTime;
       
-      // Check if we should save data (motion detected or 5 minutes passed)
       const shouldSave = forceUpdate || 
-                        timeSinceLastSave >= 300000 || // 5 minutes in milliseconds
+                        timeSinceLastSave >= 300000 || 
                         pir1Value !== lastSavedStates.pir1 ||
                         pir2Value !== lastSavedStates.pir2;
 
       if (shouldSave) {
-          // Insert PIR1 data into pir_sensor_data
+          // Insert PIR1 data
           await executeQuery(
               `INSERT INTO pir_sensor_data (table_id, raw_PIR_data, PIR_Status, timestamp)
                VALUES (@table_id, @raw_PIR_data, @PIR_Status, @timestamp)`,
               {
-                  table_id: { type: sql.Int, value: 1 }, // Adjust table_id as needed
+                  table_id: { type: sql.Int, value: 3 },
                   raw_PIR_data: { type: sql.Float, value: pir1Value },
                   PIR_Status: { type: sql.Bit, value: pir1Value === 1 ? 1 : 0 },
                   timestamp: { type: sql.DateTime, value: currentTime }
               }
           );
 
-          // Insert PIR2 data into pressure_sensor_data
+          // Insert PIR2 data
           await executeQuery(
               `INSERT INTO pressure_sensor_data (table_id, raw_Pressure_data, Pressure_Status, timestamp)
                VALUES (@table_id, @raw_Pressure_data, @Pressure_Status, @timestamp)`,
               {
-                  table_id: { type: sql.Int, value: 1 }, // Adjust table_id as needed
+                  table_id: { type: sql.Int, value: 3 },
                   raw_Pressure_data: { type: sql.Float, value: pir2Value },
                   Pressure_Status: { type: sql.Bit, value: pir2Value === 1 ? 1 : 0 },
                   timestamp: { type: sql.DateTime, value: currentTime }
               }
           );
 
-          // Update last saved states
+          // Check current occupancy state
+          const wouldBeOccupied = pir1Value === 1 && pir2Value === 1 ? 1 : 0;
+          let shouldUpdateOccupancy = false;
+          let finalOccupancyState = lastOccupancyChange.state;
+
+          // If sensors indicate occupancy and we're currently unoccupied
+          if (wouldBeOccupied === 1 && lastOccupancyChange.state === 0) {
+              shouldUpdateOccupancy = true;
+              finalOccupancyState = 1;
+          } 
+          // If sensors indicate no occupancy and we're currently occupied
+          else if (wouldBeOccupied === 0 && lastOccupancyChange.state === 1) {
+              // Check if cooldown period has passed
+              const timeSinceLastOccupancy = currentTime - lastOccupancyChange.timestamp;
+              if (timeSinceLastOccupancy >= OCCUPANCY_COOLDOWN) {
+                  shouldUpdateOccupancy = true;
+                  finalOccupancyState = 0;
+              }
+          }
+
+          // Update occupancy if needed
+          if (shouldUpdateOccupancy) {
+              await executeQuery(
+                  `MERGE occupancy_status AS target
+                   USING (SELECT @table_id as table_id) AS source
+                   ON (target.table_id = source.table_id)
+                   WHEN MATCHED THEN
+                       UPDATE SET 
+                           Occupancy = @Occupancy,
+                           timestamp = @timestamp
+                   WHEN NOT MATCHED THEN
+                       INSERT (table_id, Occupancy, timestamp)
+                       VALUES (@table_id, @Occupancy, @timestamp);`,
+                  {
+                      table_id: { type: sql.Int, value: 3 },
+                      Occupancy: { type: sql.Bit, value: finalOccupancyState },
+                      timestamp: { type: sql.DateTime, value: currentTime }
+                  }
+              );
+
+              // Update last occupancy change tracking
+              lastOccupancyChange = {
+                  timestamp: currentTime,
+                  state: finalOccupancyState
+              };
+
+              console.log('Updated occupancy:', {
+                  timestamp: currentTime,
+                  newState: finalOccupancyState,
+                  reason: finalOccupancyState === 1 ? 'Both sensors active' : 'Cooldown period passed'
+              });
+          }
+
           lastSavedStates = {
               pir1: pir1Value,
               pir2: pir2Value,
               lastSaveTime: currentTime
           };
 
-          console.log('Saved sensor data:', {
+          console.log('Updated sensor data:', {
               timestamp: currentTime,
               pir1: pir1Value,
-              pir2: pir2Value
+              pir2: pir2Value,
+              currentOccupancy: lastOccupancyChange.state
           });
-
-          // Trigger occupancy check
-          await checkAndUpdateOccupancy();
-      }
-  } catch (err) {
-      console.error('Error inserting sensor data:', err);
-  }
-}
-
-// Modified parser event handler
-parser.on('data', async (data) => {
-  console.log('Raw data from COM9:', data);
-
-  try {
-      // Extract PIR values from the debug output
-      // Example: "Raw Values -> PIR1: 0 | PIR2: 1 | Last States -> PIR1: 0 | PIR2: 1"
-      const matches = data.match(/PIR1: (\d+) \| PIR2: (\d+)/);
-      
-      if (matches) {
-          const pir1Value = parseInt(matches[1]);
-          const pir2Value = parseInt(matches[2]);
-          
-          console.log('Parsed PIR values:', {
-              PIR1: pir1Value,
-              PIR2: pir2Value
-          });
-
-          await processSensorData(pir1Value, pir2Value);
       }
   } catch (err) {
       console.error('Error processing sensor data:', err);
   }
+}
+parser.on('data', async (data) => {
+    console.log('Raw data from COM9:', data);
+
+    try {
+        const matches = data.match(/PIR1: (\d+) \| PIR2: (\d+)/);
+        
+        if (matches) {
+            const pir1Value = parseInt(matches[1]);
+            const pir2Value = parseInt(matches[2]);
+            
+            console.log('Parsed PIR values:', {
+                PIR1: pir1Value,
+                PIR2: pir2Value
+            });
+
+            await processSensorData(pir1Value, pir2Value);
+        }
+    } catch (err) {
+        console.error('Error processing sensor data:', err);
+    }
 });
 
-// Add a periodic save every 5 minutes regardless of state changes
+// Periodic save every 5 minutes
 setInterval(async () => {
-  if (lastSavedStates.pir1 !== null && lastSavedStates.pir2 !== null) {
-      await processSensorData(lastSavedStates.pir1, lastSavedStates.pir2, true);
-  }
-}, 300000); // 5 minutes
-
-// Check and update occupancy status
-async function checkAndUpdateOccupancy() {
-    try {
-        for (let tableId = 1; tableId <= 8; tableId++) {
-            try {
-                const result = await executeQuery(
-                    `DECLARE @latestPIR bit, @latestPressure bit;
-
-                    SELECT TOP 1 @latestPIR = PIR_Status
-                    FROM pir_sensor_data 
-                    WHERE table_id = @table_id
-                    ORDER BY timestamp DESC;
-
-                    SELECT TOP 1 @latestPressure = Pressure_Status
-                    FROM pressure_sensor_data
-                    WHERE table_id = @table_id
-                    ORDER BY timestamp DESC;
-
-                    SELECT @latestPIR as PIR_Status, @latestPressure as Pressure_Status;`,
-                    {
-                        table_id: { type: sql.Int, value: tableId }
-                    }
-                );
-
-                const sensorData = result.recordset[0];
-                
-                if (sensorData && (sensorData.PIR_Status !== null || sensorData.Pressure_Status !== null)) {
-                    const isOccupied = sensorData.PIR_Status === true && sensorData.Pressure_Status === true ? 1 : 0;
-
-                    await executeQuery(
-                        `MERGE occupancy_status AS target
-                         USING (SELECT @table_id as table_id) AS source
-                         ON (target.table_id = source.table_id)
-                         WHEN MATCHED THEN
-                             UPDATE SET 
-                                 Occupancy = @Occupancy,
-                                 timestamp = @timestamp
-                         WHEN NOT MATCHED THEN
-                             INSERT (table_id, Occupancy, timestamp)
-                             VALUES (@table_id, @Occupancy, @timestamp);`,
-                        {
-                            table_id: { type: sql.Int, value: tableId },
-                            Occupancy: { type: sql.Bit, value: isOccupied },
-                            timestamp: { type: sql.DateTime, value: new Date() }
-                        }
-                    );
-
-                    console.log(`Updated occupancy for table ${tableId}:`, {
-                        PIR_Status: sensorData.PIR_Status,
-                        Pressure_Status: sensorData.Pressure_Status,
-                        Occupancy: isOccupied
-                    });
-                }
-            } catch (err) {
-                console.error(`Error processing table ${tableId}:`, err);
-                continue;
-            }
-        }
-        console.log('Completed occupancy status update for all tables');
-    } catch (err) {
-        console.error('Error in checkAndUpdateOccupancy:', err);
+    if (lastSavedStates.pir1 !== null && lastSavedStates.pir2 !== null) {
+        await processSensorData(lastSavedStates.pir1, lastSavedStates.pir2, true);
     }
-}
+}, 300000);
+
+// Error handling for serial port
+serialPort.on('error', (err) => {
+    console.error('Serial Port Error:', err);
+});
 
 // API endpoints
 app.get('/pir-sensor/:tableId', async (req, res) => {
@@ -353,17 +342,9 @@ app.get('/table-status/:tableId', async (req, res) => {
     }
 });
 
-// Modified initialize function
 async function initialize() {
     try {
         await initializePool();
-        
-        // Only check occupancy periodically
-        setInterval(checkAndUpdateOccupancy, 5 * 60 * 1000);
-        
-        // Initial occupancy check
-        await checkAndUpdateOccupancy();
-        
         app.listen(port, () => {
             console.log(`Server is running on port ${port}`);
         });
