@@ -4,10 +4,10 @@
 
 ## Instructions to start the frontend:
 
-To install the packages:
+**To install the packages:**
 
 npm install --legacy-peer-deps
 
-To start the application:
+**To start the frontend application:**
 
-ng serve
+ng serve or npm start
